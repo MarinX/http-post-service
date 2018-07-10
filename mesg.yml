@@ -1,0 +1,47 @@
+name: "HTTP POST MESG service"
+description: "Emits event on request and process POST calls"
+configuration:
+  ports:
+    - "8080"
+events:
+  onRequest:
+    description: "Event emitted when server gets a HTTP POST request"
+    data:
+      date:
+        description: "the date and time of the request"
+        type: String
+      id:
+        description: "an unique id of the request" 
+        type: String
+      body:
+        description: "the body of the request"
+        type: String
+tasks:
+  execute:
+    name: "Execute"
+    description: "Execute HTTP POST call"
+    inputs:
+      url:
+        description: "the URL of the request"
+        type: String
+        optional: false
+      body:
+        description: "the body of the request"
+        type: String
+        optional: true
+    outputs:
+      success:
+        name: "Success"
+        data:
+          statusCode:
+            description: "the status code of the response"
+            type: Number
+          body:
+            description: "the body of the response"
+            type: String
+      error:
+        name: "Error"
+        data:
+          message:
+            description: "the error's message"
+            type: String
