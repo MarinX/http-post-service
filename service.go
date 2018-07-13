@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"os"
 	"strings"
+	"sync"
 	"time"
 
 	api "github.com/mesg-foundation/core/api/service"
@@ -31,12 +32,14 @@ type OnRequestEvent struct {
 
 // Request to service
 type Request struct {
+	ID   int    `json:"id,omitempty"`
 	URL  string `json:"url"`
 	Body string `json:"body"`
 }
 
 // Response from server struct
 type Response struct {
+	ID      int              `json:"id,omitempty"`
 	Success *SuccessResponse `json:"success,omitempty"`
 	Error   *ErrorResponse   `json:"error,omitempty"`
 }
@@ -95,21 +98,61 @@ func (s *Service) ListenTask() error {
 	}
 
 	for {
+		var err error
 		res, err := stream.Recv()
 		if err != nil {
 			log.Fatalln(err)
+			continue
 		}
 
-		response := s.handleTask(res.InputData)
-		buff, err := json.Marshal(response)
+		var outputKey string
+		var responseBuffer []byte
+
+		switch res.TaskKey {
+		case "execute":
+			outputKey = "response"
+			req := new(Request)
+			err = json.Unmarshal([]byte(res.InputData), req)
+			if err != nil {
+				break
+			}
+
+			responseBuffer, err = json.Marshal(s.handleTask(req, nil))
+			break
+
+		case "batchExecute":
+			outputKey = "batchResponse"
+			var requests []Request
+			var responses []Response
+			wg := new(sync.WaitGroup)
+
+			if err := json.Unmarshal([]byte(res.InputData), &requests); err != nil {
+				break
+			}
+
+			for _, r := range requests {
+				wg.Add(1)
+				go func(wg *sync.WaitGroup, r Request) {
+					response := s.handleTask(&r, wg)
+					response.ID = r.ID
+					responses = append(responses, *response)
+				}(wg, r)
+			}
+
+			wg.Wait()
+			responseBuffer, err = json.Marshal(responses)
+			break
+		}
+
 		if err != nil {
 			log.Fatalln(err)
+			responseBuffer, _ = json.Marshal(makeResponse(0, "", err))
 		}
 
 		_, err = s.client.SubmitResult(context.Background(), &api.SubmitResultRequest{
 			ExecutionID: res.ExecutionID,
-			OutputKey:   "response",
-			OutputData:  string(buff),
+			OutputKey:   outputKey,
+			OutputData:  string(responseBuffer),
 		})
 		if err != nil {
 			log.Fatalln(err)
@@ -117,10 +160,9 @@ func (s *Service) ListenTask() error {
 	}
 }
 
-func (s *Service) handleTask(data string) *Response {
-	req := &Request{}
-	if err := json.Unmarshal([]byte(data), req); err != nil {
-		return makeResponse(0, "", err)
+func (s *Service) handleTask(req *Request, wg *sync.WaitGroup) *Response {
+	if wg != nil {
+		defer wg.Done()
 	}
 
 	// validate only URL, body can be empty

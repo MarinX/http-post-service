@@ -45,3 +45,41 @@ tasks:
           message:
             description: "the error's message"
             type: String
+  batchExecute:
+    name: "Batch Execute"
+    description: "Execute multiple HTTP POST calls"
+    inputs:
+      id:
+        description: "the ID of the request"
+        type: Number
+        optional: false
+      url:
+        description: "the URL of the request"
+        type: String
+        optional: false
+      body:
+        description: "the body of the request"
+        type: String
+        optional: true
+    outputs:
+      batchID:
+        name: "Batch ID"
+        data: 
+          id:
+            description: "The ID of the request"
+            type: Number
+      success:
+        name: "Success"
+        data:
+          statusCode:
+            description: "the status code of the response"
+            type: Number
+          body:
+            description: "the body of the response"
+            type: String
+      error:
+        name: "Error"
+        data:
+          message:
+            description: "the error's message"
+            type: String
